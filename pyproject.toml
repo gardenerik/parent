@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "parent"
+version = "23.1001"
+description = ""
+authors = ["Adam Zahradník <adam.zahradnik@trojsten.sk>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyprctl = "^0.1.3"
+click = "^8.1.7"
+
+[tool.poetry.scripts]
+parent = "parent:run"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.9.1"
+ruff = "^0.0.289"
+pre-commit = "^3.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+select = ["E", "F", "I"]
+
+[tool.bumpver]
+current_version = "23.1001"
+version_pattern = "0Y.BUILD"
+commit_message = "bump version {old_version} -> {new_version}"
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'current_version = "{version}"',
+    'version = "{version}"',
+]
+"parent.py" = [
+    'VERSION = "{version}"'
+]
