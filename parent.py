@@ -24,9 +24,10 @@ VERSION = "23.1001"
 @click.option("-e", "--stderr", help="Redirect stderr to file.", type=click.Path(dir_okay=False, writable=True))
 @click.option("--stderr-to-stdout", help="Redirect stderr to stdout.", is_flag=True)
 @click.option("-s", "--stats", help="File to write stats data to.", type=click.File(mode="w"))
+@click.option("-x", "--exitcode", help="Return the same exitcode as child.", is_flag=True)
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def run(stats, **kwargs):
+def run(stats, exitcode, **kwargs):
     pid = os.fork()
     if pid == 0:  # Child process
         child(**kwargs)
@@ -34,6 +35,8 @@ def run(stats, **kwargs):
         run_stats = parent(pid, **kwargs)
         if stats:
             json.dump(asdict(run_stats), stats)
+        if exitcode:
+            exit(run_stats.exit_code)
 
 
 @dataclass
