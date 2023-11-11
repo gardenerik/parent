@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "parent"
-version = "23.1001"
+version = "23.1002"
 description = ""
 authors = ["Adam Zahradník <adam.zahradnik@trojsten.sk>"]
 license = "MIT"
@@ -27,7 +27,7 @@ build-backend = "poetry.core.masonry.api"
 select = ["E", "F", "I"]
 
 [tool.bumpver]
-current_version = "23.1001"
+current_version = "23.1002"
 version_pattern = "0Y.BUILD"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true

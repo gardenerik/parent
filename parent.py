@@ -10,7 +10,7 @@ import click
 import pyprctl
 
 
-VERSION = "23.1001"
+VERSION = "23.1002"
 
 
 @click.command(help=f"Run program with parent version {VERSION}.")
