@@ -16,6 +16,7 @@ VERSION = "23.1002"
 @click.option(
     "-m", "--memory", type=int, help="Memory address space limit of the program in kB."
 )
+@click.option("--stack", type=int, help="Stack size limit of the program in kB.")
 @click.option(
     "-t",
     "--cpu-time",
@@ -117,6 +118,7 @@ def parent(pid, real_time, cpu_time, **_) -> RunStats:
 
 def child(
     memory,
+    stack,
     cpu_time,
     file_size,
     processes,
@@ -131,6 +133,14 @@ def child(
     if memory:
         memory_bytes = memory * 1000
         resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
+
+    if stack:
+        stack_bytes = stack * 1000
+        resource.setrlimit(resource.RLIMIT_STACK, (stack_bytes, stack_bytes))
+    else:
+        resource.setrlimit(
+            resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY)
+        )
 
     if cpu_time:
         cpu_time_secs = math.ceil(cpu_time / 1000)
