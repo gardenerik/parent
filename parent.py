@@ -4,27 +4,67 @@ import os
 import resource
 import signal
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 import click
 import pyprctl
-
 
 VERSION = "23.1002"
 
 
 @click.command(help=f"Run program with parent version {VERSION}.")
-@click.option("-m", "--memory", type=int, help="Memory address space limit of the program in kB.")
-@click.option("-t", "--cpu-time", type=int, help="Limit the amount of CPU time the program can use in milliseconds.")
-@click.option("-r", "--real-time", type=int, help="Limit the amount of real time the program can run for in milliseconds.")
-@click.option("-f", "--file-size", type=int, help="Limit the size of files that the program can create / modify in kB.")
-@click.option("-p", "--processes", type=int, help="Number of processes (or threads) the program can use.")
-@click.option("-i", "--stdin", help="Redirect stdin from file.", type=click.Path(exists=True, dir_okay=False, readable=True))
-@click.option("-o", "--stdout", help="Redirect stdout to file.", type=click.Path(dir_okay=False, writable=True))
-@click.option("-e", "--stderr", help="Redirect stderr to file.", type=click.Path(dir_okay=False, writable=True))
+@click.option(
+    "-m", "--memory", type=int, help="Memory address space limit of the program in kB."
+)
+@click.option(
+    "-t",
+    "--cpu-time",
+    type=int,
+    help="Limit the amount of CPU time the program can use in milliseconds.",
+)
+@click.option(
+    "-r",
+    "--real-time",
+    type=int,
+    help="Limit the amount of real time the program can run for in milliseconds.",
+)
+@click.option(
+    "-f",
+    "--file-size",
+    type=int,
+    help="Limit the size of files that the program can create / modify in kB.",
+)
+@click.option(
+    "-p",
+    "--processes",
+    type=int,
+    help="Number of processes (or threads) the program can use.",
+)
+@click.option(
+    "-i",
+    "--stdin",
+    help="Redirect stdin from file.",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+)
+@click.option(
+    "-o",
+    "--stdout",
+    help="Redirect stdout to file.",
+    type=click.Path(dir_okay=False, writable=True),
+)
+@click.option(
+    "-e",
+    "--stderr",
+    help="Redirect stderr to file.",
+    type=click.Path(dir_okay=False, writable=True),
+)
 @click.option("--stderr-to-stdout", help="Redirect stderr to stdout.", is_flag=True)
-@click.option("-s", "--stats", help="File to write stats data to.", type=click.File(mode="w"))
-@click.option("-x", "--exitcode", help="Return the same exitcode as child.", is_flag=True)
+@click.option(
+    "-s", "--stats", help="File to write stats data to.", type=click.File(mode="w")
+)
+@click.option(
+    "-x", "--exitcode", help="Return the same exitcode as child.", is_flag=True
+)
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def run(stats, exitcode, **kwargs):
@@ -64,7 +104,7 @@ def parent(pid, real_time, cpu_time, **_) -> RunStats:
 
     cpu_time_ms = int(usage.ru_utime * 1000)
     duration_ms = int(duration * 1000)
-    max_rss_kilobytes = int(usage.ru_maxrss * 1.024)    # rusage is in KiB
+    max_rss_kilobytes = int(usage.ru_maxrss * 1.024)  # rusage is in KiB
 
     timeouted = False
     if real_time and duration_ms >= real_time:
@@ -75,7 +115,19 @@ def parent(pid, real_time, cpu_time, **_) -> RunStats:
     return RunStats(exit_code, max_rss_kilobytes, cpu_time_ms, duration_ms, timeouted)
 
 
-def child(memory, cpu_time, file_size, processes, program, args, stdin, stdout, stderr, stderr_to_stdout, **_):
+def child(
+    memory,
+    cpu_time,
+    file_size,
+    processes,
+    program,
+    args,
+    stdin,
+    stdout,
+    stderr,
+    stderr_to_stdout,
+    **_,
+):
     if memory:
         memory_bytes = memory * 1000
         resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
