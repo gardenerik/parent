@@ -1,24 +1,62 @@
-# parent
+<div align="center">
+  <img src=".github/icon.svg" alt="Logo" height="80">
+  <p>Parent is a simple wrapper that allows you to run a program with limited resources and access.</p>
+</div>
 
-A simple way to run process with limited resources.
 
-## Usage
+## Available options
 
-```
-Options:
-  -m, --memory INTEGER     Memory address space limit of the program in kB.
-  -t, --cpu-time INTEGER   Limit the amount of CPU time the program can use in
-                           milliseconds.
-  -r, --real-time INTEGER  Limit the amount of real time the program can run
-                           for in milliseconds.
-  -f, --file-size INTEGER  Limit the size of files that the program can create
-                           / modify in kB.
-  -p, --processes INTEGER  Number of processes (or threads) the program can
-                           use.
-  -i, --stdin FILE         Redirect stdin from file.
-  -o, --stdout FILE        Redirect stdout to file.
-  -e, --stderr FILE        Redirect stderr to file.
-  --stderr-to-stdout       Redirect stderr to stdout.
-  -s, --stats FILENAME     File to write stats data to.
-  --help                   Show this message and exit.
-```
+### Resource limits
+
+The resources available for the program can be limited using these options. The limits are enforced using the Linux
+kernel's rlimit.
+
+| Option               | Description                                                                |
+|----------------------|----------------------------------------------------------------------------|
+| `-m / --memory N`    | The program's maximum memory address space in kilobytes.                   |
+| `-t / --cpu-time N`  | The program's maximum CPU time in milliseconds.                            |
+| `-r / --real-time N` | The program's maximum real-time execution time in milliseconds.            |
+| `--stack N`          | The program's stack size limit in kilobytes. (-1 for unlimited)            |
+| `-f / --file-size N` | The program's maximum file size in kilobytes that it can create or modify. |
+| `-p / --processes N` | The number of threads, or processes, the program can use.                  |
+
+### I/O
+
+Program's stdin, stdout, and stderr will by default be redirected to parent's. You can change this behaviour using these
+options.
+
+| Option               | Description                              |
+|----------------------|------------------------------------------|
+| `--stdin FILE`       | Redirect a file to the program's stdin.  |
+| `--stdout FILE`      | Redirect the program's stdout to a file. |
+| `--stderr FILE`      | Redirect the program's stdout to a file. |
+| `--stderr-to-stdout` | Redirect the program's stderr to stdout. |
+
+### File access
+
+The program can access any file on the system by default. You can use these settings to restrict its access. Make sure 
+you at least allow access to the program itself, since if you enable any of these options, the default behavior will be 
+to prevent access to any files. File access is limited using Linux kernel's landlock. These options can be used multiple
+times to allow access to multiple paths.
+
+| Option                | Description                                                        |
+|-----------------------|--------------------------------------------------------------------|
+| `--fs-readonly PATH`  | Allow the program read from files located under the provided path. |
+| `--fs-readwrite PATH` | Allow the program write to files located under the provided path.  |
+
+### Environment
+
+The program inherits environment variables by default. It is possible to disable default inheritance and pass additional
+environment variables.
+
+| Option             | Description                  |
+|--------------------|------------------------------|
+| `--env NAME VALUE` | Set an environment variable. |
+| `--empty-env`      | Do not inherit environment.  |
+
+### Miscelaneous options
+
+| Option              | Description                          |
+|---------------------|--------------------------------------|
+| `--drop-caps`       | Drop the program's capabilities.     |
+| `-s / --stats FILE` | Save execution statistics to a file. |
