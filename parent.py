@@ -7,68 +7,91 @@ import time
 from dataclasses import asdict, dataclass
 
 import click
-import pyprctl
+import landlock
+import prctl
 
 VERSION = "23.1002"
 
 
-@click.command(help=f"Run program with parent version {VERSION}.")
-@click.option(
-    "-m", "--memory", type=int, help="Memory address space limit of the program in kB."
+@click.command(
+    help=f"Run program with parent version {VERSION}.",
+    context_settings={
+        "allow_interspersed_args": False,
+    },
 )
-@click.option("--stack", type=int, help="Stack size limit of the program in kB.")
+@click.option(
+    "-m",
+    "--memory",
+    type=int,
+    help="The program's maximum memory address space in kilobytes.",
+)
 @click.option(
     "-t",
     "--cpu-time",
     type=int,
-    help="Limit the amount of CPU time the program can use in milliseconds.",
+    help="The program's maximum CPU time in milliseconds.",
 )
 @click.option(
     "-r",
     "--real-time",
     type=int,
-    help="Limit the amount of real time the program can run for in milliseconds.",
+    help="The program's maximum real-time execution time in milliseconds.",
 )
+@click.option("--stack", type=int, help="The program's stack size limit in kilobytes.")
 @click.option(
     "-f",
     "--file-size",
     type=int,
-    help="Limit the size of files that the program can create / modify in kB.",
+    help="The program's maximum file size in kilobytes that it can create or modify.",
 )
 @click.option(
     "-p",
     "--processes",
     type=int,
-    help="Number of processes (or threads) the program can use.",
+    help="The number of threads, or processes, the program can use.",
 )
 @click.option(
-    "-i",
     "--stdin",
-    help="Redirect stdin from file.",
+    help="Redirect a file to the program's stdin.",
     type=click.Path(exists=True, dir_okay=False, readable=True),
 )
 @click.option(
-    "-o",
     "--stdout",
-    help="Redirect stdout to file.",
+    help="Redirect the program's stdout to a file.",
     type=click.Path(dir_okay=False, writable=True),
 )
 @click.option(
-    "-e",
     "--stderr",
-    help="Redirect stderr to file.",
+    help="Redirect the program's stderr to a file.",
     type=click.Path(dir_okay=False, writable=True),
 )
-@click.option("--stderr-to-stdout", help="Redirect stderr to stdout.", is_flag=True)
 @click.option(
-    "-s", "--stats", help="File to write stats data to.", type=click.File(mode="w")
+    "--stderr-to-stdout", help="Redirect the program's stderr to stdout.", is_flag=True
 )
 @click.option(
-    "-x", "--exitcode", help="Return the same exitcode as child.", is_flag=True
+    "-s",
+    "--stats",
+    help="Save execution statistics to a file.",
+    type=click.File(mode="w"),
 )
+@click.option(
+    "--fs-readonly",
+    help="Allow the program read from files located under the provided path.",
+    multiple=True,
+)
+@click.option(
+    "--fs-readwrite",
+    help="Allow the program write to files located under the provided path.",
+    multiple=True,
+)
+@click.option(
+    "--env", help="Set an environment variable.", type=(str, str), multiple=True
+)
+@click.option("--empty-env", help="Do not inherit parent's environment.", is_flag=True)
+@click.option("--drop-caps", help="Drop the program's capabilities.", is_flag=True)
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def run(stats, exitcode, **kwargs):
+def run(stats, **kwargs):
     pid = os.fork()
     if pid == 0:  # Child process
         child(**kwargs)
@@ -76,8 +99,7 @@ def run(stats, exitcode, **kwargs):
         run_stats = parent(pid, **kwargs)
         if stats:
             json.dump(asdict(run_stats), stats)
-        if exitcode:
-            exit(run_stats.exit_code)
+        exit(run_stats.exit_code)
 
 
 @dataclass
@@ -128,16 +150,21 @@ def child(
     stdout,
     stderr,
     stderr_to_stdout,
+    fs_readonly,
+    fs_readwrite,
+    env,
+    empty_env,
+    drop_caps,
     **_,
 ):
     if memory:
         memory_bytes = memory * 1000
         resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
 
-    if stack:
+    if stack and stack > 0:
         stack_bytes = stack * 1000
         resource.setrlimit(resource.RLIMIT_STACK, (stack_bytes, stack_bytes))
-    else:
+    elif stack < 0:
         resource.setrlimit(
             resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY)
         )
@@ -156,11 +183,26 @@ def child(
     # disable core dumps
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
+    # file access limit
+    if fs_readonly or fs_readwrite:
+        rs = landlock.Ruleset()
+        if fs_readonly:
+            rs.allow(
+                *fs_readonly,
+                rules=landlock.FSAccess.READ_FILE
+                | landlock.FSAccess.READ_DIR
+                | landlock.FSAccess.EXECUTE,
+            )
+        if fs_readwrite:
+            rs.allow(*fs_readwrite)
+        rs.apply()
+
     # drop all capabilities
-    pyprctl.cap_inheritable.clear()
-    pyprctl.cap_ambient.clear()
-    pyprctl.cap_permitted.clear()
-    pyprctl.set_no_new_privs()
+    if drop_caps:
+        prctl.cap_permitted.limit()
+        prctl.cap_inheritable.limit()
+        prctl.cap_effective.limit()
+        prctl.set_no_new_privs(1)
 
     if stdin:
         fh = os.open(stdin, os.O_RDONLY)
@@ -180,4 +222,10 @@ def child(
     if stderr_to_stdout:
         os.dup2(1, 2)
 
-    os.execv(program, (os.path.basename(program),) + args)
+    process_env = {}
+    if not empty_env:
+        process_env.update(os.environ)
+    process_env.update({k: v for k, v in env})
+
+    print("start", process_env)
+    os.execve(program, (os.path.basename(program),) + args, process_env)
