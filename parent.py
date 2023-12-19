@@ -161,13 +161,14 @@ def child(
         memory_bytes = memory * 1000
         resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
 
-    if stack and stack > 0:
-        stack_bytes = stack * 1000
-        resource.setrlimit(resource.RLIMIT_STACK, (stack_bytes, stack_bytes))
-    elif stack < 0:
-        resource.setrlimit(
-            resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY)
-        )
+    if stack:
+        if stack > 0:
+            stack_bytes = stack * 1000
+            resource.setrlimit(resource.RLIMIT_STACK, (stack_bytes, stack_bytes))
+        elif stack < 0:
+            resource.setrlimit(
+                resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY)
+            )
 
     if cpu_time:
         cpu_time_secs = math.ceil(cpu_time / 1000)
