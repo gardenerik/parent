@@ -10,7 +10,7 @@ import click
 import landlock
 import prctl
 
-VERSION = "23.1003"
+VERSION = "23.1004"
 
 
 @click.command(
