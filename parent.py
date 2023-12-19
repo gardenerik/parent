@@ -228,5 +228,4 @@ def child(
         process_env.update(os.environ)
     process_env.update({k: v for k, v in env})
 
-    print("start", process_env)
     os.execve(program, (os.path.basename(program),) + args, process_env)
