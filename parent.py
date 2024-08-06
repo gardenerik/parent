@@ -130,10 +130,18 @@ def parent(pid, real_time, cpu_time, **_) -> RunStats:
     max_rss_kilobytes = int(usage.ru_maxrss * 1.024)  # rusage is in KiB
 
     timeouted = False
+
     if real_time and duration_ms >= real_time:
         timeouted = True
-    if cpu_time and cpu_time_ms >= cpu_time:
+    elif cpu_time and cpu_time_ms >= cpu_time:
         timeouted = True
+    elif os.WIFSIGNALED(exitstatus) and os.WTERMSIG(exitstatus) == 9:
+        # if process was killed, add 2% tolerance (minimum of 15ms)
+        # to compensate errors in time measuring
+        if real_time and max(duration_ms * 1.02, duration_ms + 0.015) >= real_time:
+            timeouted = True
+        elif cpu_time and max(cpu_time_ms * 1.02, duration_ms + 0.015) >= cpu_time:
+            timeouted = True
 
     return RunStats(exit_code, max_rss_kilobytes, cpu_time_ms, duration_ms, timeouted)
 
