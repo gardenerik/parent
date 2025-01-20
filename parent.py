@@ -89,6 +89,12 @@ VERSION = "24.1"
 )
 @click.option("--empty-env", help="Do not inherit parent's environment.", is_flag=True)
 @click.option("--drop-caps", help="Drop the program's capabilities.", is_flag=True)
+@click.option(
+    "--seccomp-deny",
+    help="Deny certain syscalls (kill by default).",
+    multiple=True,
+    default=["kill"],
+)
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def run(stats, **kwargs):
@@ -163,6 +169,7 @@ def child(
     env,
     empty_env,
     drop_caps,
+    seccomp_deny,
     **_,
 ):
     if memory:
@@ -212,6 +219,16 @@ def child(
         prctl.cap_inheritable.limit()
         prctl.cap_effective.limit()
         prctl.set_no_new_privs(1)
+
+    if seccomp_deny:
+        import pyseccomp as seccomp
+
+        f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
+
+        for syscall in seccomp_deny:
+            f.add_rule(seccomp.ERRNO(1), syscall)
+
+        f.load()
 
     if stdin:
         fh = os.open(stdin, os.O_RDONLY)

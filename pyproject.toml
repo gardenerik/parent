@@ -11,6 +11,7 @@ python = "^3.11"
 click = "^8.1.7"
 landlock = "^1.0.0.dev4"
 python-prctl = "^1.8.1"
+pyseccomp = "^0.1.2"
 
 [tool.poetry.scripts]
 parent = "parent:run"

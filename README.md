@@ -56,7 +56,8 @@ environment variables.
 
 ### Miscelaneous options
 
-| Option              | Description                          |
-|---------------------|--------------------------------------|
-| `--drop-caps`       | Drop the program's capabilities.     |
-| `-s / --stats FILE` | Save execution statistics to a file. |
+| Option                   | Description                              |
+|--------------------------|------------------------------------------|
+| `--drop-caps`            | Drop the program's capabilities.         |
+| `--seccomp-deny SYSCALL` | Deny certain syscalls (kill by default). |
+| `-s / --stats FILE`      | Save execution statistics to a file.     |
