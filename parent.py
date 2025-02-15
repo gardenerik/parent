@@ -199,6 +199,17 @@ def child(
     # disable core dumps
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
+    if seccomp_deny:
+        # import it before restricting file access
+        import pyseccomp as seccomp
+
+        f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
+
+        for syscall in seccomp_deny:
+            f.add_rule(seccomp.ERRNO(1), syscall)
+
+        f.load()
+
     # file access limit
     if fs_readonly or fs_readwrite:
         rs = landlock.Ruleset()
@@ -219,16 +230,6 @@ def child(
         prctl.cap_inheritable.limit()
         prctl.cap_effective.limit()
         prctl.set_no_new_privs(1)
-
-    if seccomp_deny:
-        import pyseccomp as seccomp
-
-        f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
-
-        for syscall in seccomp_deny:
-            f.add_rule(seccomp.ERRNO(1), syscall)
-
-        f.load()
 
     if stdin:
         fh = os.open(stdin, os.O_RDONLY)
