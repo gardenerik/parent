@@ -77,12 +77,17 @@ VERSION = "24.1"
 )
 @click.option(
     "--fs-readonly",
-    help="Allow the program read from files located under the provided path.",
+    help="Allow the program read from files or folder located under the provided path.",
+    multiple=True,
+)
+@click.option(
+    "--fs-writepnly",
+    help="Allow the program write to files or folders located under the provided path.",
     multiple=True,
 )
 @click.option(
     "--fs-readwrite",
-    help="Allow the program write to files located under the provided path.",
+    help="Allow the program read or write to files or folderslocated under the provided path.",
     multiple=True,
 )
 @click.option(
@@ -166,6 +171,7 @@ def child(
     stderr,
     stderr_to_stdout,
     fs_readonly,
+    fs_writeonly,
     fs_readwrite,
     env,
     empty_env,
@@ -220,7 +226,7 @@ def child(
         stderr_fh = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
 
     # file access limit
-    if fs_readonly or fs_readwrite:
+    if fs_readonly or fs_writeonly or fs_readwrite:
         rs = landlock.Ruleset()
         if fs_readonly:
             files = []
@@ -236,6 +242,28 @@ def child(
             rs.allow(*files, rules=rules)
             # append read_dir for directories only, else it would break for files
             rs.allow(*dirs, rules=rules | landlock.FSAccess.READ_DIR)
+
+        if fs_writeonly:
+            files = []
+            dirs = []
+            for path in fs_writeonly:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = landlock.FSAccess.WRITE_FILE
+
+            rs.allow(*files, rules=rules)
+            rs.allow(
+                *dirs,
+                rules=rules
+                | landlock.FSAccess.READ_DIR
+                | landlock.FSAccess.REMOVE_DIR
+                | landlock.FSAccess.REMOVE_FILE
+                | landlock.FSAccess.MAKE_DIR
+                | landlock.FSAccess.MAKE_REG,
+            )
 
         if fs_readwrite:
             files = []

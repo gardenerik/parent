@@ -39,10 +39,11 @@ you at least allow access to the program itself, since if you enable any of thes
 to prevent access to any files. File access is limited using Linux kernel's landlock. These options can be used multiple
 times to allow access to multiple paths.
 
-| Option                | Description                                                        |
-|-----------------------|--------------------------------------------------------------------|
-| `--fs-readonly PATH`  | Allow the program read from files located under the provided path. |
-| `--fs-readwrite PATH` | Allow the program write to files located under the provided path.  |
+| Option                | Description                                                                          |
+|-----------------------|--------------------------------------------------------------------------------------|
+| `--fs-readonly PATH`  | Allow the program read from files or folders located under the provided path.        |
+| `--fs-writeonly PATH` | Allow the program write to files of folders located under the provided path.         |
+| `--fs-readwrite PATH` | Allow the program read or write to files of folders located under the provided path. |
 
 ### Environment
 
