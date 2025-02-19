@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 import click
 import landlock
 import prctl
+import pyseccomp as seccomp
 
 VERSION = "24.1"
 
@@ -200,9 +201,6 @@ def child(
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
     if seccomp_deny:
-        # import it before restricting file access
-        import pyseccomp as seccomp
-
         f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
 
         for syscall in seccomp_deny:
@@ -210,18 +208,61 @@ def child(
 
         f.load()
 
+    stdin_fh, stdout_fh, stderr_fh = None, None, None
+
+    if stdin:
+        stdin_fh = os.open(stdin, os.O_RDONLY)
+
+    if stdout:
+        stdout_fh = os.open(stdout, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+
+    if stderr:
+        stderr_fh = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+
     # file access limit
     if fs_readonly or fs_readwrite:
         rs = landlock.Ruleset()
         if fs_readonly:
-            rs.allow(
-                *fs_readonly,
-                rules=landlock.FSAccess.READ_FILE
-                | landlock.FSAccess.READ_DIR
-                | landlock.FSAccess.EXECUTE,
-            )
+            files = []
+            dirs = []
+            for path in fs_readonly:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = landlock.FSAccess.READ_FILE | landlock.FSAccess.EXECUTE
+
+            rs.allow(*files, rules=rules)
+            # append read_dir for directories only, else it would break for files
+            rs.allow(*dirs, rules=rules | landlock.FSAccess.READ_DIR)
+
         if fs_readwrite:
-            rs.allow(*fs_readwrite)
+            files = []
+            dirs = []
+            for path in fs_readwrite:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = (
+                landlock.FSAccess.READ_FILE
+                | landlock.FSAccess.EXECUTE
+                | landlock.FSAccess.WRITE_FILE
+            )
+
+            rs.allow(*files, rules=rules)
+            rs.allow(
+                *dirs,
+                rules=rules
+                | landlock.FSAccess.READ_DIR
+                | landlock.FSAccess.REMOVE_DIR
+                | landlock.FSAccess.REMOVE_FILE
+                | landlock.FSAccess.MAKE_DIR
+                | landlock.FSAccess.MAKE_REG,
+            )
+
         rs.apply()
 
     # drop all capabilities
@@ -231,20 +272,17 @@ def child(
         prctl.cap_effective.limit()
         prctl.set_no_new_privs(1)
 
-    if stdin:
-        fh = os.open(stdin, os.O_RDONLY)
-        os.dup2(fh, 0)
-        os.close(fh)
+    if stdin and stdin_fh:
+        os.dup2(stdin_fh, 0)
+        os.close(stdin_fh)
 
-    if stdout:
-        fh = os.open(stdout, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-        os.dup2(fh, 1)
-        os.close(fh)
+    if stdout and stdout_fh:
+        os.dup2(stdout_fh, 1)
+        os.close(stdout_fh)
 
-    if stderr:
-        fh = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-        os.dup2(fh, 2)
-        os.close(fh)
+    if stderr and stderr_fh:
+        os.dup2(stderr_fh, 2)
+        os.close(stderr_fh)
 
     if stderr_to_stdout:
         os.dup2(1, 2)
