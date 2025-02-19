@@ -81,13 +81,13 @@ VERSION = "24.1"
     multiple=True,
 )
 @click.option(
-    "--fs-writepnly",
+    "--fs-writeonly",
     help="Allow the program write to files or folders located under the provided path.",
     multiple=True,
 )
 @click.option(
     "--fs-readwrite",
-    help="Allow the program read or write to files or folderslocated under the provided path.",
+    help="Allow the program read or write to files or folders located under the provided path.",
     multiple=True,
 )
 @click.option(
