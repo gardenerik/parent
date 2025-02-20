@@ -55,10 +55,21 @@ environment variables.
 | `--env NAME VALUE` | Set an environment variable. |
 | `--empty-env`      | Do not inherit environment.  |
 
+### Syscalls
+
+The program cannot use `kill` syscall by default (to prevent it from sending `SIGSTOP` to parent) while `--seccomp-default` is not set.
+You can use these options to allow or deny certain syscalls.
+
+| Option                     | Description                             |
+|----------------------------|-----------------------------------------|
+| `--seccomp-default POLICY` | Default policy for syscalls.            |
+| `--seccomp-allow SYSCALL`  | Allow certain syscalls.                 |
+| `--seccomp-deny SYSCALL`   | Deny certain syscalls (return ERRNO 1). |
+| `--seccomp-kill SYSCALL`   | Deny certain syscalls (kill process).   |
+
 ### Miscelaneous options
 
 | Option                   | Description                              |
 |--------------------------|------------------------------------------|
 | `--drop-caps`            | Drop the program's capabilities.         |
-| `--seccomp-deny SYSCALL` | Deny certain syscalls (kill by default). |
 | `-s / --stats FILE`      | Save execution statistics to a file.     |

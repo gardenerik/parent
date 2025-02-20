@@ -96,10 +96,24 @@ VERSION = "24.1"
 @click.option("--empty-env", help="Do not inherit parent's environment.", is_flag=True)
 @click.option("--drop-caps", help="Drop the program's capabilities.", is_flag=True)
 @click.option(
-    "--seccomp-deny",
-    help="Deny certain syscalls (kill by default).",
+    "--seccomp-default",
+    help="Default policy for syscalls (when not set, kill is denied).",
+    type=click.Choice(["allow", "deny", "kill", "none"], case_sensitive=False),
+)
+@click.option(
+    "--seccomp-allow",
+    help="Deny syscall.",
     multiple=True,
-    default=["kill"],
+)
+@click.option(
+    "--seccomp-deny",
+    help="Deny syscall.",
+    multiple=True,
+)
+@click.option(
+    "--seccomp-kill",
+    help="Kill program on that syscall.",
+    multiple=True,
 )
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
@@ -176,7 +190,10 @@ def child(
     env,
     empty_env,
     drop_caps,
+    seccomp_default,
+    seccomp_allow,
     seccomp_deny,
+    seccomp_kill,
     **_,
 ):
     if memory:
@@ -206,14 +223,32 @@ def child(
     # disable core dumps
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
-    if seccomp_deny:
-        f = seccomp.SyscallFilter(defaction=seccomp.ALLOW)
+    print(seccomp_default, seccomp_allow, seccomp_deny, seccomp_kill)
 
-        for syscall in seccomp_deny:
-            f.add_rule(seccomp.ERRNO(1), syscall)
+    # seccomp syscall filtering
+    if seccomp_default != "none":
+        syscall_filter = seccomp.SyscallFilter(
+            defaction=getattr(seccomp, seccomp_default.upper())
+            if seccomp_default
+            else seccomp.ALLOW
+        )
 
-        f.load()
+        if seccomp_default is None:
+            syscall_filter.add_rule(seccomp.ERRNO(1), "kill")
 
+        else:
+            for syscall in seccomp_allow:
+                syscall_filter.add_rule(seccomp.ALLOW, syscall)
+
+            for syscall in seccomp_deny:
+                syscall_filter.add_rule(seccomp.ERRNO(1), syscall)
+
+            for syscall in seccomp_kill:
+                syscall_filter.add_rule(seccomp.KILL_PROCESS, syscall)
+
+        syscall_filter.load()
+
+    # open needed files before restricting file access
     stdin_fh, stdout_fh, stderr_fh = None, None, None
 
     if stdin:
@@ -300,6 +335,7 @@ def child(
         prctl.cap_effective.limit()
         prctl.set_no_new_privs(1)
 
+    # redirect streams
     if stdin and stdin_fh:
         os.dup2(stdin_fh, 0)
         os.close(stdin_fh)
