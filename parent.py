@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 import click
 import landlock
 import prctl
+import pyseccomp as seccomp
 
 VERSION = "24.1"
 
@@ -76,12 +77,17 @@ VERSION = "24.1"
 )
 @click.option(
     "--fs-readonly",
-    help="Allow the program read from files located under the provided path.",
+    help="Allow the program read from files or folder located under the provided path.",
+    multiple=True,
+)
+@click.option(
+    "--fs-writeonly",
+    help="Allow the program write to files or folders located under the provided path.",
     multiple=True,
 )
 @click.option(
     "--fs-readwrite",
-    help="Allow the program write to files located under the provided path.",
+    help="Allow the program read or write to files or folders located under the provided path.",
     multiple=True,
 )
 @click.option(
@@ -89,6 +95,26 @@ VERSION = "24.1"
 )
 @click.option("--empty-env", help="Do not inherit parent's environment.", is_flag=True)
 @click.option("--drop-caps", help="Drop the program's capabilities.", is_flag=True)
+@click.option(
+    "--seccomp-default",
+    help="Default policy for syscalls (when not set, kill is denied).",
+    type=click.Choice(["allow", "deny", "kill", "none"], case_sensitive=False),
+)
+@click.option(
+    "--seccomp-allow",
+    help="Deny syscall.",
+    multiple=True,
+)
+@click.option(
+    "--seccomp-deny",
+    help="Deny syscall.",
+    multiple=True,
+)
+@click.option(
+    "--seccomp-kill",
+    help="Kill program on that syscall.",
+    multiple=True,
+)
 @click.argument("program")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def run(stats, **kwargs):
@@ -159,10 +185,15 @@ def child(
     stderr,
     stderr_to_stdout,
     fs_readonly,
+    fs_writeonly,
     fs_readwrite,
     env,
     empty_env,
     drop_caps,
+    seccomp_default,
+    seccomp_allow,
+    seccomp_deny,
+    seccomp_kill,
     **_,
 ):
     if memory:
@@ -192,18 +223,107 @@ def child(
     # disable core dumps
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
+    # seccomp syscall filtering
+    if seccomp_default != "none":
+        syscall_filter = seccomp.SyscallFilter(
+            defaction=getattr(seccomp, seccomp_default.upper())
+            if seccomp_default
+            else seccomp.ALLOW
+        )
+
+        if seccomp_default is None:
+            syscall_filter.add_rule(seccomp.ERRNO(1), "kill")
+
+        else:
+            for syscall in seccomp_allow:
+                syscall_filter.add_rule(seccomp.ALLOW, syscall)
+
+            for syscall in seccomp_deny:
+                syscall_filter.add_rule(seccomp.ERRNO(1), syscall)
+
+            for syscall in seccomp_kill:
+                syscall_filter.add_rule(seccomp.KILL_PROCESS, syscall)
+
+        syscall_filter.load()
+
+    # open needed files before restricting file access
+    stdin_fh, stdout_fh, stderr_fh = None, None, None
+
+    if stdin:
+        stdin_fh = os.open(stdin, os.O_RDONLY)
+
+    if stdout:
+        stdout_fh = os.open(stdout, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+
+    if stderr:
+        stderr_fh = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+
     # file access limit
-    if fs_readonly or fs_readwrite:
+    if fs_readonly or fs_writeonly or fs_readwrite:
         rs = landlock.Ruleset()
         if fs_readonly:
+            files = []
+            dirs = []
+            for path in fs_readonly:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = landlock.FSAccess.READ_FILE | landlock.FSAccess.EXECUTE
+
+            rs.allow(*files, rules=rules)
+            # append read_dir for directories only, else it would break for files
+            rs.allow(*dirs, rules=rules | landlock.FSAccess.READ_DIR)
+
+        if fs_writeonly:
+            files = []
+            dirs = []
+            for path in fs_writeonly:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = landlock.FSAccess.WRITE_FILE
+
+            rs.allow(*files, rules=rules)
             rs.allow(
-                *fs_readonly,
-                rules=landlock.FSAccess.READ_FILE
+                *dirs,
+                rules=rules
                 | landlock.FSAccess.READ_DIR
-                | landlock.FSAccess.EXECUTE,
+                | landlock.FSAccess.REMOVE_DIR
+                | landlock.FSAccess.REMOVE_FILE
+                | landlock.FSAccess.MAKE_DIR
+                | landlock.FSAccess.MAKE_REG,
             )
+
         if fs_readwrite:
-            rs.allow(*fs_readwrite)
+            files = []
+            dirs = []
+            for path in fs_readwrite:
+                if os.path.isdir(path):
+                    dirs.append(path)
+                else:
+                    files.append(path)
+
+            rules = (
+                landlock.FSAccess.READ_FILE
+                | landlock.FSAccess.EXECUTE
+                | landlock.FSAccess.WRITE_FILE
+            )
+
+            rs.allow(*files, rules=rules)
+            rs.allow(
+                *dirs,
+                rules=rules
+                | landlock.FSAccess.READ_DIR
+                | landlock.FSAccess.REMOVE_DIR
+                | landlock.FSAccess.REMOVE_FILE
+                | landlock.FSAccess.MAKE_DIR
+                | landlock.FSAccess.MAKE_REG,
+            )
+
         rs.apply()
 
     # drop all capabilities
@@ -213,20 +333,18 @@ def child(
         prctl.cap_effective.limit()
         prctl.set_no_new_privs(1)
 
-    if stdin:
-        fh = os.open(stdin, os.O_RDONLY)
-        os.dup2(fh, 0)
-        os.close(fh)
+    # redirect streams
+    if stdin and stdin_fh:
+        os.dup2(stdin_fh, 0)
+        os.close(stdin_fh)
 
-    if stdout:
-        fh = os.open(stdout, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-        os.dup2(fh, 1)
-        os.close(fh)
+    if stdout and stdout_fh:
+        os.dup2(stdout_fh, 1)
+        os.close(stdout_fh)
 
-    if stderr:
-        fh = os.open(stderr, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-        os.dup2(fh, 2)
-        os.close(fh)
+    if stderr and stderr_fh:
+        os.dup2(stderr_fh, 2)
+        os.close(stderr_fh)
 
     if stderr_to_stdout:
         os.dup2(1, 2)

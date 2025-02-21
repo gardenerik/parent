@@ -39,10 +39,11 @@ you at least allow access to the program itself, since if you enable any of thes
 to prevent access to any files. File access is limited using Linux kernel's landlock. These options can be used multiple
 times to allow access to multiple paths.
 
-| Option                | Description                                                        |
-|-----------------------|--------------------------------------------------------------------|
-| `--fs-readonly PATH`  | Allow the program read from files located under the provided path. |
-| `--fs-readwrite PATH` | Allow the program write to files located under the provided path.  |
+| Option                | Description                                                                          |
+|-----------------------|--------------------------------------------------------------------------------------|
+| `--fs-readonly PATH`  | Allow the program read from files or folders located under the provided path.        |
+| `--fs-writeonly PATH` | Allow the program write to files of folders located under the provided path.         |
+| `--fs-readwrite PATH` | Allow the program read or write to files of folders located under the provided path. |
 
 ### Environment
 
@@ -54,9 +55,21 @@ environment variables.
 | `--env NAME VALUE` | Set an environment variable. |
 | `--empty-env`      | Do not inherit environment.  |
 
+### Syscalls
+
+The program cannot use `kill` syscall by default (to prevent it from sending `SIGSTOP` to parent) while `--seccomp-default` is not set.
+You can use these options to allow or deny certain syscalls.
+
+| Option                     | Description                             |
+|----------------------------|-----------------------------------------|
+| `--seccomp-default POLICY` | Default policy for syscalls.            |
+| `--seccomp-allow SYSCALL`  | Allow certain syscalls.                 |
+| `--seccomp-deny SYSCALL`   | Deny certain syscalls (return ERRNO 1). |
+| `--seccomp-kill SYSCALL`   | Deny certain syscalls (kill process).   |
+
 ### Miscelaneous options
 
-| Option              | Description                          |
-|---------------------|--------------------------------------|
-| `--drop-caps`       | Drop the program's capabilities.     |
-| `-s / --stats FILE` | Save execution statistics to a file. |
+| Option                   | Description                              |
+|--------------------------|------------------------------------------|
+| `--drop-caps`            | Drop the program's capabilities.         |
+| `-s / --stats FILE`      | Save execution statistics to a file.     |
