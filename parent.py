@@ -223,8 +223,6 @@ def child(
     # disable core dumps
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
-    print(seccomp_default, seccomp_allow, seccomp_deny, seccomp_kill)
-
     # seccomp syscall filtering
     if seccomp_default != "none":
         syscall_filter = seccomp.SyscallFilter(
