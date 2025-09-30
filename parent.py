@@ -198,7 +198,7 @@ def child(
 ):
     if memory:
         memory_bytes = memory * 1000
-        resource.setrlimit(resource.RLIMIT_AS, (memory_bytes, memory_bytes))
+        resource.setrlimit(resource.RLIMIT_DATA, (memory_bytes, memory_bytes))
 
     if stack:
         if stack > 0:
