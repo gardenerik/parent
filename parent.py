@@ -11,7 +11,7 @@ import landlock
 import prctl
 import pyseccomp as seccomp
 
-VERSION = "25.1"
+VERSION = "25.2"
 
 
 @click.command(
