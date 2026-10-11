@@ -166,7 +166,7 @@ def parent(pid, real_time, cpu_time, **_) -> RunStats:
         # to compensate errors in time measuring
         if real_time and max(duration_ms * 1.02, duration_ms + 0.015) >= real_time:
             timeouted = True
-        elif cpu_time and max(cpu_time_ms * 1.02, duration_ms + 0.015) >= cpu_time:
+        elif cpu_time and max(cpu_time_ms * 1.02, cpu_time_ms + 0.015) >= cpu_time:
             timeouted = True
 
     return RunStats(exit_code, max_rss_kilobytes, cpu_time_ms, duration_ms, timeouted)
